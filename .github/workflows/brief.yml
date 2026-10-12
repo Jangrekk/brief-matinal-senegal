@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   preparer-brief:
@@ -28,3 +28,9 @@ jobs:
 
       - name: Générer le bulletin
         run: python brief.py
+      - name: Enregistrer le bulletin dans GitHub
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bulletin.txt
+          git diff --cached --quiet || (git commit -m "Mise à jour du bulletin quotidien" && git push)
