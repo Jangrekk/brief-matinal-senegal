@@ -84,7 +84,26 @@
           throw new Error("Bulletin introuvable");
         }
 
-        zone.textContent = await reponse.text();
+        const texte = await reponse.text();
+zone.replaceChildren();
+
+texte.split("\n").forEach(ligne => {
+  const p = document.createElement("p");
+  const correspondance = ligne.match(/^🔗\s*(?:Lire la source\s*:\s*)?(https?:\/\/\S+)$/);
+
+  if (correspondance) {
+    const lien = document.createElement("a");
+    lien.href = correspondance[1];
+    lien.textContent = "🔗 Lire l'article";
+    lien.target = "_blank";
+    lien.rel = "noopener noreferrer";
+    p.appendChild(lien);
+  } else {
+    p.textContent = ligne;
+  }
+
+  zone.appendChild(p);
+});
         document.getElementById("date").textContent =
           "Dernière consultation : " +
           new Date().toLocaleString("fr-FR", {
