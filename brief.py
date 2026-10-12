@@ -1,8 +1,26 @@
 import requests
 import feedparser
-from datetime import datetime
+
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from urllib.parse import quote_plus
 from zoneinfo import ZoneInfo
 from pathlib import Path
+
+
+# ============================================================
+# 🇸🇳 LE BRIEF MATINAL SÉNÉGAL
+# Actualités récentes + météo des 14 régions
+# ============================================================
+
+FUSEAU_HORAIRE = ZoneInfo("Africa/Dakar")
+NOMBRE_ARTICLES = 5
+AGE_MAXIMUM_HEURES = 48
+
+
+# ============================================================
+# 🌦️ COORDONNÉES DES 14 RÉGIONS DU SÉNÉGAL
+# ============================================================
 
 SENEGAL = [
     ("Dakar", 14.7167, -17.4677),
@@ -21,16 +39,190 @@ SENEGAL = [
     ("Ziguinchor", 12.583, -16.271),
 ]
 
-def get_weather():
-    lignes = ["\n🌦️ MÉTÉO DES 14 RÉGIONS DU SÉNÉGAL\n"]
 
-    for region, lat, lon in SENEGAL:
+# ============================================================
+# 📰 ACTUALITÉS : SÉNÉGAL, MONDE, TECHNOLOGIE ET EMPLOI
+# ============================================================
+
+def get_news():
+
+    lignes = [
+        "",
+        "=" * 45,
+        "📰 ACTUALITÉS ET INFORMATIONS",
+        "=" * 45,
+        f"📅 Articles recherchés sur les dernières "
+        f"{AGE_MAXIMUM_HEURES} heures.",
+        "ℹ️ Les dates indiquées sont celles fournies par les flux RSS."
+    ]
+
+    recherches = [
+        (
+            "🇸🇳 ACTUALITÉS DU SÉNÉGAL",
+            "Sénégal actualités politique économie société"
+        ),
+        (
+            "🌍 ACTUALITÉS INTERNATIONALES",
+            "actualités internationales monde"
+        ),
+        (
+            "💻 TECHNOLOGIE ET CYBERSÉCURITÉ",
+            "intelligence artificielle technologie cybersécurité"
+        ),
+        (
+            "🎓 EMPLOI, CONCOURS, BOURSES ET FORMATIONS",
+            "Sénégal emploi recrutement concours bourses formations"
+        ),
+    ]
+
+    maintenant = datetime.now(timezone.utc)
+    limite = maintenant - timedelta(hours=AGE_MAXIMUM_HEURES)
+
+    for categorie, recherche in recherches:
+
+        lignes.append("")
+        lignes.append("-" * 40)
+        lignes.append(categorie)
+        lignes.append("-" * 40)
+
+        requete = quote_plus(f"{recherche} when:2d")
+
+        url = (
+            "https://news.google.com/rss/search?q="
+            f"{requete}"
+            "&hl=fr&gl=SN&ceid=SN:fr"
+        )
+
         try:
-            response = requests.get(
+            reponse = requests.get(
+                url,
+                timeout=25,
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 "
+                        "(compatible; BriefMatinalSenegal/1.0)"
+                    )
+                },
+            )
+
+            reponse.raise_for_status()
+
+            flux = feedparser.parse(reponse.content)
+
+            articles_recents = []
+
+            for article in flux.entries:
+
+                date_brute = article.get("published")
+
+                if not date_brute:
+                    continue
+
+                try:
+                    date_article = parsedate_to_datetime(date_brute)
+
+                    if date_article.tzinfo is None:
+                        date_article = date_article.replace(
+                            tzinfo=timezone.utc
+                        )
+
+                    date_article = date_article.astimezone(
+                        timezone.utc
+                    )
+
+                except (ValueError, TypeError, OverflowError):
+                    continue
+
+                # Garder uniquement les articles des dernières 48 heures.
+                if limite <= date_article <= maintenant:
+
+                    articles_recents.append(
+                        (date_article, article)
+                    )
+
+            # Trier les articles du plus récent au plus ancien.
+            articles_recents.sort(
+                key=lambda element: element[0],
+                reverse=True
+            )
+
+            if not articles_recents:
+                lignes.append(
+                    "Aucune actualité récente avec une date "
+                    "de publication vérifiable n'a été trouvée."
+                )
+                continue
+
+            # Limiter le nombre d'articles par catégorie.
+            for date_article, article in articles_recents[
+                :NOMBRE_ARTICLES
+            ]:
+
+                titre = article.get(
+                    "title",
+                    "Titre indisponible"
+                )
+
+                lien = article.get("link", "")
+
+                date_locale = date_article.astimezone(
+                    FUSEAU_HORAIRE
+                )
+
+                lignes.append("")
+                lignes.append(f"• {titre}")
+
+                lignes.append(
+                    "  📅 Publié le : "
+                    + date_locale.strftime(
+                        "%d/%m/%Y à %H:%M"
+                    )
+                    + " (heure du Sénégal)"
+                )
+
+                if lien:
+                    lignes.append(
+                        f"  🔗 Lire la source : {lien}"
+                    )
+
+        except requests.RequestException:
+            lignes.append(
+                "Impossible de contacter la source d'actualités."
+            )
+
+        except Exception as erreur:
+            lignes.append(
+                "Erreur pendant la récupération des actualités : "
+                + type(erreur).__name__
+            )
+
+    return "\n".join(lignes)
+
+
+# ============================================================
+# 🌦️ MÉTÉO DES 14 RÉGIONS DU SÉNÉGAL
+# ============================================================
+
+def get_weather():
+
+    lignes = [
+        "",
+        "=" * 45,
+        "🌦️ MÉTÉO DES 14 RÉGIONS DU SÉNÉGAL",
+        "=" * 45,
+        "Prévisions quotidiennes fournies par Open-Meteo.",
+        "Les valeurs représentent un point de référence "
+        "dans chaque région."
+    ]
+
+    for region, latitude, longitude in SENEGAL:
+
+        try:
+            reponse = requests.get(
                 "https://api.open-meteo.com/v1/forecast",
                 params={
-                    "latitude": lat,
-                    "longitude": lon,
+                    "latitude": latitude,
+                    "longitude": longitude,
                     "daily": (
                         "temperature_2m_max,"
                         "temperature_2m_min,"
@@ -39,98 +231,110 @@ def get_weather():
                     "timezone": "Africa/Dakar",
                     "forecast_days": 1,
                 },
-                timeout=20,
-            )
-            response.raise_for_status()
-            data = response.json()["daily"]
-
-            minimum = data["temperature_2m_min"][0]
-            maximum = data["temperature_2m_max"][0]
-            pluie = data["precipitation_probability_max"][0]
-
-            lignes.append(
-                f"📍 {region} : {minimum}–{maximum} °C"
-                f" | Risque maximal de pluie : {pluie}%"
+                timeout=25,
             )
 
-        except Exception:
-            lignes.append(f"📍 {region} : prévisions indisponibles")
+            reponse.raise_for_status()
 
-    return "\n".join(lignes)
+            donnees = reponse.json()
+            meteo = donnees["daily"]
 
-def get_news():
-    lignes = ["\n📰 ACTUALITÉS ET INFORMATIONS\n"]
+            minimum = meteo["temperature_2m_min"][0]
+            maximum = meteo["temperature_2m_max"][0]
+            pluie = meteo["precipitation_probability_max"][0]
 
-    flux = [
-        (
-            "🇸🇳 Sénégal",
-            "https://news.google.com/rss/search?q=S%C3%A9n%C3%A9gal"
-            "&hl=fr&gl=SN&ceid=SN:fr",
-        ),
-        (
-            "🌍 Monde",
-            "https://news.google.com/rss/search?q=actualit%C3%A9s"
-            "+internationales&hl=fr&gl=SN&ceid=SN:fr",
-        ),
-        (
-            "💻 Technologie et cybersécurité",
-            "https://news.google.com/rss/search?q=intelligence"
-            "+artificielle+cybers%C3%A9curit%C3%A9"
-            "&hl=fr&gl=SN&ceid=SN:fr",
-        ),
-        (
-            "🎓 Emploi, concours et formations",
-            "https://news.google.com/rss/search?q=S%C3%A9n%C3%A9gal"
-            "+emploi+concours+bourses&hl=fr&gl=SN&ceid=SN:fr",
-        ),
-    ]
-
-    for categorie, url in flux:
-        lignes.append(f"\n{categorie}\n")
-
-        try:
-            feed = feedparser.parse(url)
-            articles = feed.entries[:4]
-
-            if not articles:
-                lignes.append("Aucun article récupéré.")
+            if minimum is None or maximum is None:
+                lignes.append(
+                    f"📍 {region} : températures indisponibles."
+                )
                 continue
 
-            for article in articles:
-                titre = article.get("title", "Sans titre")
-                lien = article.get("link", "")
+            risque_pluie = (
+                f"{pluie}%"
+                if pluie is not None
+                else "indisponible"
+            )
 
-                lignes.append(f"• {titre}")
-
-                if lien:
-                    lignes.append(f"  🔗 Lire la source :{lien}")
+            lignes.append(
+                f"📍 {region} : "
+                f"{minimum}–{maximum} °C"
+                f" | Risque maximal de pluie : {risque_pluie}"
+            )
 
         except Exception:
-            lignes.append("Flux d'actualités indisponible.")
+            lignes.append(
+                f"📍 {region} : prévisions indisponibles."
+            )
 
     return "\n".join(lignes)
 
-def main():
-    maintenant = datetime.now(ZoneInfo("Africa/Dakar"))
 
-    bulletin = [
+# ============================================================
+# 🧾 GÉNÉRATION DU BULLETIN COMPLET
+# ============================================================
+
+def main():
+
+    maintenant = datetime.now(FUSEAU_HORAIRE)
+
+    entete = [
         "🇸🇳 LE BRIEF MATINAL SÉNÉGAL",
-        f"📅 {maintenant.strftime('%d/%m/%Y')}",
         "",
         "Votre rendez-vous quotidien avec l'information.",
-        get_news(),
-        get_weather(),
         "",
-        "ℹ️ Vérifiez les informations et les annonces officielles "
-        "avant toute décision.",
-        "📡 Sources : liens des articles et Open-Meteo pour la météo.",
+        f"📅 Date : {maintenant.strftime('%A %d/%m/%Y')}",
+        f"🕗 Heure de génération : {maintenant.strftime('%H:%M')}",
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📰 INFORMER • APPRENDRE • PROGRESSER",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
     ]
 
-    contenu = "\n".join(bulletin)
-    Path("bulletin.txt").write_text(contenu, encoding="utf-8")
+    actualites = get_news()
+
+    meteo = get_weather()
+
+    pied_de_page = [
+        "",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "📌 CONSEILS AUX LECTEURS",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━",
+        "",
+        "• Consultez les liens pour lire les articles complets.",
+        "• Vérifiez les concours et offres sur les sites officiels.",
+        "• Ne payez jamais pour une offre d'emploi sans vérification.",
+        "",
+        "🌦️ Source météo : Open-Meteo.",
+        "📰 Source des actualités : Google News RSS.",
+        "",
+        "🇸🇳 LE BRIEF MATINAL SÉNÉGAL",
+        "L'essentiel pour commencer la journée.",
+    ]
+
+    contenu = "\n".join(
+        entete
+        + [actualites]
+        + [meteo]
+        + pied_de_page
+    )
+
+    chemin = Path("bulletin.txt")
+
+    chemin.write_text(
+        contenu,
+        encoding="utf-8"
+    )
 
     print(contenu)
-    print("\n✅ Bulletin enregistré dans bulletin.txt")
+
+    print("")
+    print("✅ Bulletin généré avec succès.")
+    print(f"📄 Fichier enregistré : {chemin.resolve()}")
+
+
+# ============================================================
+# 🚀 LANCEMENT DU PROGRAMME
+# ============================================================
 
 if __name__ == "__main__":
     main()
