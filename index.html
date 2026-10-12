@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#075b42">
+  <title>Le Brief Matinal Sénégal</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 20px;
+      background: #f3f6f4;
+      color: #17231d;
+      font-family: Arial, sans-serif;
+      line-height: 1.6;
+    }
+    header {
+      background: #075b42;
+      color: white;
+      padding: 25px 18px;
+      border-radius: 16px;
+      text-align: center;
+    }
+    header h1 { margin: 0 0 8px; }
+    main {
+      max-width: 850px;
+      margin: 22px auto;
+      background: white;
+      padding: 20px;
+      border-radius: 14px;
+      box-shadow: 0 3px 14px #00000010;
+    }
+    #bulletin {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      font-size: 15px;
+    }
+    button {
+      border: 0;
+      background: #075b42;
+      color: white;
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 15px;
+      margin: 8px 6px 8px 0;
+    }
+    footer {
+      text-align: center;
+      color: #526158;
+      font-size: 13px;
+      padding: 18px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🇸🇳 Le Brief Matinal Sénégal</h1>
+    <p>Votre rendez-vous quotidien avec l'information.</p>
+  </header>
+
+  <main>
+    <h2>📰 Le bulletin du jour</h2>
+    <p id="date">Chargement…</p>
+    <button onclick="chargerBulletin()">Actualiser</button>
+    <button onclick="partager()">Partager le bulletin</button>
+    <div id="bulletin">Chargement du bulletin…</div>
+  </main>
+
+  <footer>
+    Actualités, technologie, opportunités et météo des 14 régions.
+    <br>Vérifiez les informations importantes auprès des sources officielles.
+  </footer>
+
+  <script>
+    async function chargerBulletin() {
+      const zone = document.getElementById("bulletin");
+      zone.textContent = "Chargement du bulletin…";
+
+      try {
+        const url = "bulletin.txt?v=" + Date.now();
+        const reponse = await fetch(url, { cache: "no-store" });
+
+        if (!reponse.ok) {
+          throw new Error("Bulletin introuvable");
+        }
+
+        zone.textContent = await reponse.text();
+        document.getElementById("date").textContent =
+          "Dernière consultation : " +
+          new Date().toLocaleString("fr-FR", {
+            timeZone: "Africa/Dakar"
+          });
+      } catch (erreur) {
+        zone.textContent =
+          "Le bulletin est temporairement indisponible. " +
+          "Réessayez dans quelques instants.";
+      }
+    }
+
+    async function partager() {
+      const texte = document.getElementById("bulletin").textContent;
+      const donnees = {
+        title: "Le Brief Matinal Sénégal",
+        text: texte,
+        url: location.href
+      };
+
+      try {
+        if (navigator.share) {
+          await navigator.share(donnees);
+        } else {
+          await navigator.clipboard.writeText(
+            donnees.title + "\n" + donnees.text + "\n" + donnees.url
+          );
+          alert("Bulletin copié !");
+        }
+      } catch (e) {}
+    }
+
+    chargerBulletin();
+  </script>
+</body>
+</html>
