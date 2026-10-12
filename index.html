@@ -4,24 +4,36 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#075b42">
+
   <title>Le Brief Matinal Sénégal</title>
+
   <style>
+    * {
+      box-sizing: border-box;
+    }
+
     body {
       margin: 0;
-      padding: 20px;
+      padding: 16px;
       background: #f3f6f4;
       color: #17231d;
       font-family: Arial, sans-serif;
-      line-height: 1.6;
+      line-height: 1.7;
     }
+
     header {
       background: #075b42;
       color: white;
-      padding: 25px 18px;
+      padding: 26px 18px;
       border-radius: 16px;
       text-align: center;
     }
-    header h1 { margin: 0 0 8px; }
+
+    header h1 {
+      margin: 0 0 8px;
+      font-size: 25px;
+    }
+
     main {
       max-width: 850px;
       margin: 22px auto;
@@ -30,20 +42,43 @@
       border-radius: 14px;
       box-shadow: 0 3px 14px #00000010;
     }
+
     #bulletin {
+      font-size: 15px;
+      overflow-wrap: anywhere;
+    }
+
+    .ligne {
+      margin: 10px 0;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
-      font-size: 15px;
     }
+
+    .source {
+      display: inline-block;
+      margin: 5px 0 12px;
+      padding: 7px 12px;
+      background: #e5f3ec;
+      color: #075b42;
+      text-decoration: none;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+
+    .source:hover {
+      background: #d0eadd;
+    }
+
     button {
       border: 0;
       background: #075b42;
       color: white;
       border-radius: 8px;
-      padding: 12px 16px;
+      padding: 12px 15px;
       font-size: 15px;
-      margin: 8px 6px 8px 0;
+      margin: 8px 5px 12px 0;
     }
+
     footer {
       text-align: center;
       color: #526158;
@@ -52,6 +87,7 @@
     }
   </style>
 </head>
+
 <body>
   <header>
     <h1>🇸🇳 Le Brief Matinal Sénégal</h1>
@@ -60,21 +96,138 @@
 
   <main>
     <h2>📰 Le bulletin du jour</h2>
+
     <p id="date">Chargement…</p>
-    <button onclick="chargerBulletin()">Actualiser</button>
-    <button onclick="partager()">Partager le bulletin</button>
+
+    <button onclick="chargerBulletin()">🔄 Actualiser</button>
+    <button onclick="partager()">📲 Partager</button>
+
     <div id="bulletin">Chargement du bulletin…</div>
   </main>
 
   <footer>
     Actualités, technologie, opportunités et météo des 14 régions.
-    <br>Vérifiez les informations importantes auprès des sources officielles.
+    <br>
+    Vérifiez les informations importantes auprès des sources officielles.
   </footer>
 
   <script>
     async function chargerBulletin() {
       const zone = document.getElementById("bulletin");
       zone.textContent = "Chargement du bulletin…";
+
+      try {
+        const url = "bulletin.txt?v=" + Date.now();
+
+        const reponse = await fetch(url, {
+          cache: "no-store"
+        });
+
+        if (!reponse.ok) {
+          throw new Error("Bulletin introuvable");
+        }
+
+        const texte = await reponse.text();
+
+        zone.replaceChildren();
+
+        texte.split(/\r?\n/).forEach(function(ligne) {
+          const p = document.createElement("p");
+          p.className = "ligne";
+
+          // Recherche une URL n'importe où dans la ligne.
+          const expression = /https?:\/\/[^\s<>"']+/g;
+          const correspondances = [...ligne.matchAll(expression)];
+
+          if (correspondances.length === 0) {
+            p.textContent = ligne;
+            zone.appendChild(p);
+            return;
+          }
+
+          // Conserve le texte qui précède le lien.
+          const debut = ligne.slice(0, correspondances[0].index);
+          p.textContent = debut;
+
+          correspondances.forEach(function(correspondance) {
+            let adresse = correspondance[0];
+
+            // Retire la ponctuation finale qui ne fait pas partie du lien.
+            const ponctuation = adresse.match(/[),.!?;:]+$/);
+
+            if (ponctuation) {
+              adresse = adresse.slice(0, -ponctuation[0].length);
+            }
+
+            try {
+              const lien = document.createElement("a");
+              lien.href = adresse;
+              lien.textContent = "🔗 Lire l'article";
+              lien.className = "source";
+              lien.target = "_blank";
+              lien.rel = "noopener noreferrer";
+
+              p.appendChild(lien);
+
+              if (ponctuation) {
+                p.appendChild(
+                  document.createTextNode(ponctuation[0])
+                );
+              }
+            } catch (e) {
+              p.appendChild(
+                document.createTextNode(correspondance[0])
+              );
+            }
+          });
+
+          zone.appendChild(p);
+        });
+
+        document.getElementById("date").textContent =
+          "Dernière consultation : " +
+          new Date().toLocaleString("fr-FR", {
+            timeZone: "Africa/Dakar"
+          });
+
+      } catch (erreur) {
+        zone.textContent =
+          "Le bulletin est temporairement indisponible. " +
+          "Réessayez dans quelques instants.";
+      }
+    }
+
+    async function partager() {
+      const texte =
+        document.getElementById("bulletin").innerText;
+
+      const donnees = {
+        title: "Le Brief Matinal Sénégal",
+        text: texte,
+        url: location.href
+      };
+
+      try {
+        if (navigator.share) {
+          await navigator.share(donnees);
+        } else {
+          await navigator.clipboard.writeText(
+            donnees.title + "\n" +
+            donnees.text + "\n" +
+            donnees.url
+          );
+
+          alert("Bulletin copié !");
+        }
+      } catch (e) {
+        // L'utilisateur peut annuler le partage.
+      }
+    }
+
+    chargerBulletin();
+  </script>
+</body>
+</html>
 
       try {
         const url = "bulletin.txt?v=" + Date.now();
