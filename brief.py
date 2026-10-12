@@ -103,7 +103,7 @@ def get_news():
                 lignes.append(f"• {titre}")
 
                 if lien:
-                    lignes.append(f"  🔗 {lien}")
+                    lignes.append(f"  🔗 Lire la source :{lien}")
 
         except Exception:
             lignes.append("Flux d'actualités indisponible.")
